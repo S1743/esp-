@@ -1,0 +1,142 @@
+-- [[ Roblox ESP Script ]]
+-- [[ Created by VHHEV ]]
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local LocalPlayer = Players.LocalPlayer
+local Camera = workspace.CurrentCamera
+
+-- إعدادات السكربت
+local Settings = {
+    BoxEnabled = true,
+    NameEnabled = true,
+    TracerEnabled = true,
+    TeamCheck = true, -- تجاهل اللاعبين من نفس فريقك
+    WatermarkText = "ESP by VHHEV"
+}
+
+-- إنشاء علامة الحقوق (Watermark) على الشاشة
+local Watermark = Drawing.new("Text")
+Watermark.Visible = true
+Watermark.Color = Color3.fromRGB(0, 255, 150)
+Watermark.Size = 18
+Watermark.Center = false
+Watermark.Outline = true
+Watermark.Position = Vector2.new(20, 20)
+Watermark.Text = Settings.WatermarkText
+
+-- دالة لإنشاء العناصر البصرية لكل لاعب
+local function createESP(player)
+    local box = Drawing.new("Square")
+    box.Visible = false
+    box.Color = Color3.fromRGB(255, 0, 0)
+    box.Thickness = 1.5
+    box.Filled = false
+
+    local nameTag = Drawing.new("Text")
+    nameTag.Visible = false
+    nameTag.Color = Color3.fromRGB(255, 255, 255)
+    nameTag.Size = 14
+    nameTag.Center = true
+    nameTag.Outline = true
+
+    local tracer = Drawing.new("Line")
+    tracer.Visible = false
+    tracer.Color = Color3.fromRGB(255, 255, 255)
+    tracer.Thickness = 1
+
+    local connection
+    connection = RunService.RenderStepped:Connect(function()
+        -- التأكد من أن اللاعب حي وأن الكراكتر موجود
+        if not player.Character or not player.Character:FindFirstChild("HumanoidRootPart") or not player.Character:FindFirstChild("Humanoid") or player.Character.Humanoid.Health <= 0 then
+            box.Visible = false
+            nameTag.Visible = false
+            tracer.Visible = false
+            return
+        end
+
+        -- فحص الفريق إذا كان مفعلًا
+        if Settings.TeamCheck and player.Team == LocalPlayer.Team and player ~= LocalPlayer then
+            box.Visible = false
+            nameTag.Visible = false
+            tracer.Visible = false
+            return
+        end
+
+        if player == LocalPlayer then
+            box.Visible = false
+            nameTag.Visible = false
+            tracer.Visible = false
+            return
+        end
+
+        local hrp = player.Character.HumanoidRootPart
+        local head = player.Character:FindFirstChild("Head") or hrp
+        
+        -- تحويل إحداثيات العالم إلى إحداثيات الشاشة
+        local vector, onScreen = Camera:WorldToViewportPoint(hrp.Position)
+
+        if onScreen then
+            -- حساب أبعاد الصندوق بناءً على المسافة
+            local headVector = Camera:WorldToViewportPoint(head.Position + Vector3.new(0, 0.5, 0))
+            local legVector = Camera:WorldToViewportPoint(hrp.Position - Vector3.new(0, 3, 0))
+            
+            local height = math.abs(headVector.Y - legVector.Y)
+            local width = height / 2
+
+            -- إعدادات الصندوق
+            if Settings.BoxEnabled then
+                box.Size = Vector2.new(width, height)
+                box.Position = Vector2.new(vector.X - width / 2, headVector.Y)
+                box.Visible = true
+            else
+                box.Visible = false
+            end
+
+            -- إعدادات اسم اللاعب
+            if Settings.NameEnabled then
+                nameTag.Text = player.Name .. " | VHHEV"
+                nameTag.Position = Vector2.new(vector.X, headVector.Y - 18)
+                nameTag.Visible = true
+            else
+                nameTag.Visible = false
+            end
+
+            -- إعدادات خطوط التتبع (Tracers)
+            if Settings.TracerEnabled then
+                tracer.From = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y)
+                tracer.To = Vector2.new(vector.X, legVector.Y)
+                tracer.Visible = true
+            else
+                tracer.Visible = false
+            end
+        else
+            box.Visible = false
+            nameTag.Visible = false
+            tracer.Visible = false
+        end
+    end)
+
+    -- تنظيف البيانات عند خروج اللاعب
+    player.AncestryChanged:Connect(function(_, parent)
+        if not parent then
+            connection:Disconnect()
+            box:Remove()
+            nameTag:Remove()
+            tracer:Remove()
+        end
+    end)
+end
+
+-- تطبيق الـ ESP على اللاعبين الموجودين حالياً ومن ينضمون لاحقاً
+for _, p in ipairs(Players:GetPlayers()) do
+    if p ~= LocalPlayer then
+        coroutine.wrap(createESP)(p)
+    end
+end
+
+Players.PlayerAdded:Connect(function(p)
+    if p ~= LocalPlayer then
+        coroutine.wrap(createESP)(p)
+    end
+end)
